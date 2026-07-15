@@ -1,741 +1,3 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>Sistema de Gimnasio - UCC Team Lunáticos</title>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<style>
-  :root{\r
-    --bg:#12100e; --panel:#1c1815; --panel-2:#241f1a;\r
-    --border:#332b24; --border-soft:#2a231d;\r
-    --accent:#fb923c; --accent-dim:#5c3312;\r
-    --text:#f3ede6; --text-dim:#b3a596; --text-faint:#75695c;\r
-    --success:#4ade80; --success-dim:#16401f;\r
-    --danger:#f87171; --danger-dim:#4a1c1c;\r
-    --warning:#fbbf24; --warning-dim:#4a3a12;\r
-    --mono:'Courier New',ui-monospace,monospace;\r
-    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\r
-    --red-highlight: #ef4444;\r
-  }\r
-  *{box-sizing:border-box;}\r
-  body{margin:0;min-height:100vh;background:var(--bg);font-family:var(--sans);color:var(--text);display:flex;flex-direction:column;}\r
-  .app{max-width:1180px;width:100%;margin:0 auto;padding:24px 20px 40px;flex:1;}\r
-\r
-  /* Encabezado Rediseñado con 3 Columnas */\r
-  .topbar {\r
-    border-bottom: 1px solid var(--border);\r
-    padding-bottom: 20px;\r
-    margin-bottom: 20px;\r
-  }\r
-  .header-container {\r
-    display: flex;\r
-    justify-content: space-between;\r
-    align-items: center;\r
-    gap: 20px;\r
-    margin-bottom: 12px;\r
-  }\r
-  .header-side {\r
-    flex: 1;\r
-    display: flex;\r
-    min-width: 85px;\r
-  }\r
-  .header-side.left { justify-content: flex-start; }\r
-  .header-side.right { justify-content: flex-end; }\r
-  \r
-  .header-center {\r
-    display: flex;\r
-    flex-direction: column;\r
-    align-items: center;\r
-    text-align: center;\r
-    flex: 2;\r
-  }\r
-\r
-  /* Estilos de los Logos con tamaños fijos garantizados */\r
-  .logo-side {\r
-    width: 85px;\r
-    height: 85px;\r
-    min-width: 85px;\r
-    min-height: 85px;\r
-    object-fit: contain;\r
-    border-radius: 8px;\r
-    border: 1px solid var(--border);\r
-    background: #1c1815;\r
-    box-shadow: 0 4px 8px rgba(0,0,0,0.4);\r
-    display: block;\r
-  }\r
-  .logo-main {\r
-    width: 110px;\r
-    height: 110px;\r
-    min-width: 110px;\r
-    min-height: 110px;\r
-    object-fit: contain;\r
-    border-radius: 12px;\r
-    border: 1.5px solid var(--border);\r
-    background: #1c1815;\r
-    box-shadow: 0 6px 14px rgba(0,0,0,0.6);\r
-    margin-bottom: 10px;\r
-    display: block;\r
-  }\r
-  \r
-  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 4px;}\r
-  h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.01em;}\r
-  .sub{margin:4px 0 0;font-size:13px;color:var(--text-dim);}\r
-  \r
-  .sync-row {\r
-    display: flex;\r
-    justify-content: center;\r
-    margin-top: 10px;\r
-  }\r
-  .sync-status{font-size:12px;color:var(--text-faint);display:flex;align-items:center;gap:6px;}\r
-  .dot{width:7px;height:7px;border-radius:50%;background:var(--success);}\r
-  .dot.saving{background:var(--warning);}\r
-  .dot.error{background:var(--danger);}\r
-\r
-  /* Barra de Valores del Dojo */\r
-  .dojo-values-bar {\r
-    display: flex;\r
-    justify-content: space-around;\r
-    align-items: center;\r
-    background: #090807;\r
-    border: 1px solid var(--border);\r
-    border-radius: 8px;\r
-    padding: 12px 16px;\r
-    margin-bottom: 24px;\r
-    flex-wrap: wrap;\r
-    gap: 16px;\r
-  }\r
-  .value-item {\r
-    display: flex;\r
-    align-items: center;\r
-    gap: 10px;\r
-    color: var(--text-dim);\r
-    font-size: 13px;\r
-    font-weight: 700;\r
-    letter-spacing: 0.12em;\r
-    text-transform: uppercase;\r
-  }\r
-  .value-item svg {\r
-    fill: var(--text-dim);\r
-    width: 20px;\r
-    height: 20px;\r
-  }\r
-\r
-  /* Pie de Página Motivacional */\r
-  .motivation-footer {\r
-    width: 100%;\r
-    background: #090807;\r
-    border-top: 1px solid var(--border);\r
-    padding: 24px 20px;\r
-    text-align: center;\r
-    margin-top: auto;\r
-  }\r
-  .motivation-text {\r
-    font-size: 18px;\r
-    font-style: italic;\r
-    font-weight: 800;\r
-    letter-spacing: 0.08em;\r
-    text-transform: uppercase;\r
-    color: var(--text);\r
-    margin: 0;\r
-    line-height: 1.4;\r
-  }\r
-  .motivation-highlight {\r
-    color: var(--red-highlight);\r
-    text-shadow: 0 0 8px rgba(239, 68, 68, 0.2);\r
-  }\r
-\r
-  .tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);flex-wrap:wrap;}\r
-  .tab{background:transparent;border:none;color:var(--text-dim);font-family:var(--sans);font-size:13.5px;padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}\r
-  .tab:hover{color:var(--text);}\r
-  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}\r
-\r
-  .view{display:none;} .view.active{display:block;}\r
-\r
-  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:24px;}\r
-  .stat-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px 18px;}\r
-  .stat-card .label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);margin:0 0 8px;}\r
-  .stat-card .value{font-size:25px;font-weight:700;font-family:var(--mono);margin:0;}\r
-  .stat-card.accent .value{color:var(--accent);}\r
-  .stat-card.success .value{color:var(--success);}\r
-  .stat-card.danger .value{color:var(--danger);}\r
-\r
-  .panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:20px;}\r
-  .panel h2{font-size:15px;font-weight:700;margin:0 0 16px;padding-bottom:10px;border-bottom:1px solid var(--border-soft);}\r
-\r
-  .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px;}\r
-  label{display:block;font-size:11.5px;color:var(--text-dim);margin-bottom:5px;}\r
-  input, select, textarea{width:100%;background:var(--panel-2);border:1px solid var(--border);color:var(--text);font-family:var(--sans);font-size:13.5px;padding:9px 10px;border-radius:6px;outline:none;}\r
-  input:focus, select:focus, textarea:focus{border-color:var(--accent);}\r
-  .btn{background:var(--panel-2);border:1px solid var(--border);color:var(--text);font-family:var(--sans);font-size:13px;padding:9px 16px;border-radius:6px;cursor:pointer;}\r
-  .btn:hover{border-color:var(--text-faint);}\r
-  .btn-primary{background:var(--accent-dim);border-color:var(--accent);color:#fff3e8;}\r
-  .btn-primary:hover{background:#7a4419;}\r
-  .btn-danger{background:var(--danger-dim);border-color:var(--danger);color:#ffecec;}\r
-  .btn-sm{padding:5px 10px;font-size:12px;}\r
-  .btn-row{display:flex;gap:8px;flex-wrap:wrap;}\r
-\r
-  .table-tools{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}\r
-  .table-tools input[type=text]{max-width:220px;}\r
-  .table-tools select{max-width:180px;}\r
-  table{width:100%;border-collapse:collapse;font-size:13px;}\r
-  th{text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-faint);padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}\r
-  td{padding:10px 10px;border-bottom:1px solid var(--border-soft);vertical-align:middle;}\r
-  tr:hover td{background:var(--panel-2);}\r
-  .mono{font-family:var(--mono);}\r
-  .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:.03em;}\r
-  .badge.activo{background:var(--success-dim);color:var(--success);}\r
-  .badge.vencido{background:var(--danger-dim);color:var(--danger);}\r
-  .empty-row td{text-align:center;color:var(--text-faint);padding:26px 10px;}\r
-\r
-  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100;padding:20px;}\r
-  .overlay.show{display:flex;}\r
-  .modal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:22px;width:min(92vw,460px);max-height:86vh;overflow:auto;}\r
-  .modal h3{margin:0 0 16px;font-size:15px;}\r
-  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}\r
-\r
-  .toast{position:fixed;bottom:20px;right:20px;background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--success);padding:12px 16px;border-radius:6px;font-size:13px;z-index:200;opacity:0;transform:translateY(8px);transition:all .2s ease;max-width:320px;}\r
-  .toast.show{opacity:1;transform:translateY(0);}\r
-  .toast.error{border-left-color:var(--danger);}\r
-\r
-  .warn-text{font-size:12px;color:var(--text-faint);margin:8px 0 0;}\r
-  .field-error{font-size:11.5px;color:var(--danger);margin-top:4px;display:none;}\r
-\r
-  .plan-box{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-top:6px;}\r
-  .plan-box .plan-title{font-size:13px;font-weight:700;color:var(--accent);margin:0 0 6px;}\r
-  .plan-box p{font-size:12.5px;color:var(--text-dim);margin:0 0 6px;line-height:1.5;}\r
-  .plan-box ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--text-dim);}\r
-\r
-  .catalog-row{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-soft);}\r
-  .catalog-row:last-child{border-bottom:none;}\r
-  .catalog-row .name{flex:1;font-size:13.5px;}\r
-  .catalog-row .price{font-family:var(--mono);color:var(--accent);min-width:80px;text-align:right;}\r
-\r
-  .extras-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}\r
-  .extra-chip{background:var(--panel-2);border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:11.5px;color:var(--text-dim);}\r
-\r
-  /* Horarios Estilos */\r
-  .schedule-container {\r
-    display: grid;\r
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));\r
-    gap: 16px;\r
-    margin-top: 15px;\r
-  }\r
-  .schedule-column {\r
-    background: var(--panel-2);\r
-    border: 1px solid var(--border);\r
-    border-radius: 8px;\r
-    padding: 16px;\r
-  }\r
-  .schedule-column h3 {\r
-    margin: 0 0 12px;\r
-    font-size: 14px;\r
-    text-transform: uppercase;\r
-    color: var(--accent);\r
-    border-bottom: 1px solid var(--border-soft);\r
-    padding-bottom: 6px;\r
-  }\r
-  .schedule-item {\r
-    display: flex;\r
-    justify-content: space-between;\r
-    padding: 6px 0;\r
-    font-size: 12.5px;\r
-    border-bottom: 1px solid rgba(255,255,255,0.03);\r
-  }\r
-  .schedule-item:last-child { border-bottom: none; }\r
-  .schedule-time { font-family: var(--mono); color: var(--text-dim); }\r
-  .schedule-class { font-weight: 600; color: var(--text); }\r
-\r
-  @media (max-width:768px){\r
-    .header-container {\r
-      flex-direction: row;\r
-      justify-content: center;\r
-      flex-wrap: wrap;\r
-      gap: 14px;\r
-    }\r
-    .header-side { flex: none; }\r
-    .dojo-values-bar {\r
-      justify-content: center;\r
-      gap: 12px 20px;\r
-    }\r
-  }\r
-\r
-  @media (max-width:640px){ \r
-    table{font-size:12px;} th,td{padding:8px 6px;}\r
-    .logo-main { width: 90px; height: 90px; }\r
-    .logo-side { width: 65px; height: 65px; }\r
-    h1 { font-size: 19px; }\r
-    .motivation-text { font-size: 15px; }\r
-  }\r
-</style>
-</head>
-<body>
-<div class="app">
-
-  <div class="topbar">
-    <div class="header-container">
-      <div class="header-side left">
-        <img class="logo-side" src="serpente.jpg" alt="Serpente BJJ">
-      </div>
-      
-      <div class="header-center">
-        <img class="logo-main" src="ucc.jpg" alt="UCC Team Lunáticos">
-        <span class="eyebrow">Gestión de Gimnasio</span>
-        <h1>UCC Team Lunáticos</h1>
-        <p class="sub">Mensualidades, extras y recomendaciones de rutina según cada persona</p>
-      </div>
-      
-      <div class="header-side right">
-        <img class="logo-side" src="zen.jpg" alt="Zen Martial Arts">
-      </div>
-    </div>
-    <div class="sync-row">
-      <div class="sync-status">
-        <span class="dot"></span> Sincronizado
-      </div>
-    </div>
-  </div>
-
-  <div class="dojo-values-bar">
-    <div class="value-item">
-      <svg viewBox="0 0 24 24"><path d="M19.5 7.5H16.3c.4-.6.7-1.3.7-2 0-2.2-1.8-4-4-4s-4 1.8-4 4c0 .7.3 1.4.7 2H6.5C4.6 7.5 3 9.1 3 11v8c0 1.9 1.6 3.5 3.5 3.5h11c1.9 0 3.5-1.6 3.5-3.5v-8c0-1.9-1.6-3.5-3.5-3.5zM9 5.5c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2zm11 13.5c0 .8-.7 1.5-1.5 1.5h-11C6.7 20.5 6 19.8 6 19v-8c0-.8.7-1.5 1.5-1.5h11c.8 0 1.5.7 1.5 1.5v8z"/></svg>
-      <span>Disciplina</span>
-    </div>
-    <div class="value-item">
-      <svg viewBox="0 0 24 24"><path d="M21.7 10.3l-2.4-2.4c-.4-.4-1-.4-1.4 0L16 9.8l-3.3-3.3c-.4-.4-1-.4-1.4 0l-4 4c-.4.4-.4 1 0 1.4l1.3 1.3-4.1 4.1c-.4.4-.4 1 0 1.4l2.4 2.4c.4.4 1 .4 1.4 0l4.1-4.1 1.3 1.3c.4.4 1 .4 1.4 0l4-4c.4-.4.4-1 0-1.4L16 12.6l1.9-1.9c.4-.4.4-1 0-1.4L16 12.6z"/></svg>
-      <span>Respeto</span>
-    </div>
-    <div class="value-item">
-      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5l-9-4zm0 17.9c-3.8-1.1-6.5-5-6.5-9.1V6.4l6.5-2.9 6.5 2.9v3.4c0 4.1-2.7 8-6.5 9.1zm0-11.4l1.4 2.8 3.1.5-2.2 2.2.5 3.1-2.8-1.5-2.8 1.5.5-3.1-2.2-2.2 3.1-.5 1.4-2.8z"/></svg>
-      <span>Constancia</span>
-    </div>
-    <div class="value-item">
-      <svg viewBox="0 0 24 24"><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>
-      <span>Humildad</span>
-    </div>
-    <div class="value-item">
-      <svg viewBox="0 0 24 24"><path d="M12 17.3l6.2 3.7-1.6-7 5.4-4.7-7.1-.6L12 2 9.1 8.7l-7.1.6 5.4 4.7-1.6 7z"/></svg>
-      <span>Honor</span>
-    </div>
-  </div>
-
-  <div class="tabs">
-    <button class="tab active" data-view="resumen">Resumen</button>
-    <button class="tab" data-view="miembros">Miembros</button>
-    <button class="tab" data-view="nuevo">Nuevo miembro</button>
-    <button class="tab" data-view="extras">Registrar extra</button>
-    <button class="tab" data-view="membresias">Membresías y extras</button>
-    <button class="tab" data-view="rutinas">Horarios y Disciplinas</button>
-  </div>
-
-  <div id="view-resumen" class="view active">
-    <div class="stats-grid">
-      <div class="stat-card">
-        <p class="label">Miembros Totales</p>
-        <p id="stat-totales" class="value">0</p>
-      </div>
-      <div class="stat-card success">
-        <p class="label">Al Día</p>
-        <p id="stat-al-dia" class="value">0</p>
-      </div>
-      <div class="stat-card danger">
-        <p class="label">Vencidos</p>
-        <p id="stat-vencidos" class="value">0</p>
-      </div>
-      <div class="stat-card accent">
-        <p class="label">Ingreso del Mes (L.)</p>
-        <p id="stat-ingresos" class="value">0.00</p>
-      </div>
-    </div>
-
-    <div class="panel">
-      <h2>Próximos a vencer (7 días) o ya vencidos</h2>
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>Miembro</th>
-              <th>Membresía</th>
-              <th>Vence</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody id="vencimientoBody">
-            <tr class="empty-row"><td colspan="4">Cargando datos...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <button class="btn btn-primary" id="btnExport">Exportar Excel</button>
-  </div>
-
-  <div id="view-miembros" class="view">
-    <div class="panel">
-      <h2>Buscar Miembros</h2>
-      <div class="table-tools">
-        <input type="text" id="searchBox" placeholder="Buscar por nombre o cel...">
-        <select id="filterEstado">
-          <option value="">Todos los estados</option>
-          <option value="ACTIVO">Al día</option>
-          <option value="VENCIDO">Vencidos</option>
-        </select>
-      </div>
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Celular</th>
-              <th>Membresía</th>
-              <th>Tipo de Persona</th>
-              <th>Vence</th>
-              <th>Estado</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="membersBody">
-            <tr class="empty-row"><td colspan="7">Cargando datos...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div id="view-nuevo" class="view">
-    <div class="panel">
-      <h2>Registrar Nuevo Miembro</h2>
-      <div class="form-grid">
-        <div>
-          <label>Nombre Completo *</label>
-          <input type="text" id="mNombre" placeholder="Ej. Juan Pérez">
-        </div>
-        <div>
-          <label>Teléfono (Celular)</label>
-          <input type="text" id="mTelefono" placeholder="Ej. 9988-7766">
-        </div>
-        <div>
-          <label>Fecha de Inicio</label>
-          <input type="date" id="mFechaInicio">
-        </div>
-        <div>
-          <label>Tipo de Membresía *</label>
-          <select id="mMembresia"></select>
-        </div>
-        <div>
-          <label>Tipo de Persona que Entrena *</label>
-          <select id="mObjetivo"></select>
-        </div>
-        <div>
-          <label>Descuento Especial (L.)</label>
-          <input type="number" id="mDescuento" placeholder="Ej. 150" value="0" min="0">
-        </div>
-      </div>
-      <div id="mPlanPreview"></div>
-      <div class="btn-row" style="margin-top:20px;">
-        <button class="btn btn-primary" id="btnAddMember">Registrar Miembro</button>
-        <button class="btn" id="btnClearMember">Limpiar Campos</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="view-extras" class="view">
-    <div class="panel">
-      <h2>Asignar Cargo Extra</h2>
-      <div class="form-grid">
-        <div>
-          <label>Miembro a aplicar *</label>
-          <select id="eMiembro"></select>
-        </div>
-        <div>
-          <label>Tipo de extra *</label>
-          <select id="eTipo"></select>
-        </div>
-        <div>
-          <label>Fecha del cargo</label>
-          <input type="date" id="eFecha">
-        </div>
-      </div>
-      <div class="btn-row" style="margin-top:20px;">
-        <button class="btn btn-primary" id="btnAddExtra">Aplicar Cargo</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="view-membresias" class="view">
-    <div class="panel">
-      <h2>Tipos de Membresía Disponibles</h2>
-      <div id="membershipCatalog"></div>
-      
-      <h3 style="margin:24px 0 10px;font-size:14px;">Añadir Nuevo Tipo de Membresía</h3>
-      <div class="form-grid">
-        <input type="text" id="newMembName" placeholder="Nombre (Ej. Quincenal)">
-        <input type="number" id="newMembPrice" placeholder="Precio (L.)">
-        <input type="number" id="newMembDays" placeholder="Duración en días">
-      </div>
-      <button class="btn btn-primary btn-sm" id="btnAddMembType">Añadir Membresía</button>
-    </div>
-
-    <div class="panel">
-      <h2>Catálogo de Cobros Extras</h2>
-      <div id="extraCatalog"></div>
-
-      <h3 style="margin:24px 0 10px;font-size:14px;">Añadir Nuevo Concepto Extra</h3>
-      <div class="form-grid">
-        <input type="text" id="newExtraName" placeholder="Concepto (Ej. Toalla)">
-        <input type="number" id="newExtraPrice" placeholder="Precio (L.)">
-      </div>
-      <button class="btn btn-primary btn-sm" id="btnAddExtraType">Añadir Extra</button>
-    </div>
-  </div>
-
-  <div id="view-rutinas" class="view">
-    <div class="panel">
-      <h2>Horarios Oficiales - UCC Team Lunáticos</h2>
-      <p style="font-size:13px;color:var(--text-dim);margin-bottom:20px;">
-        Visualiza la distribución de disciplinas y clases del gimnasio (Abierto de 6:00 AM a 10:00 PM).
-      </p>
-      
-      <div class="schedule-container">
-        <div class="schedule-column">
-          <h3>Lunes, Miércoles y Viernes</h3>
-          <div class="schedule-item"><span class="schedule-time">06:00 AM - 07:00 AM</span><span class="schedule-class" style="color:#f87171;">Boxeo</span></div>
-          <div class="schedule-item"><span class="schedule-time">07:00 AM - 08:00 AM</span><span class="schedule-class" style="color:#60a5fa;">Kickboxing</span></div>
-          <div class="schedule-item"><span class="schedule-time">08:00 AM - 09:00 AM</span><span class="schedule-class" style="color:#a78bfa;">MMA</span></div>
-          <div class="schedule-item"><span class="schedule-time">10:00 AM - 11:00 AM</span><span class="schedule-class" style="color:var(--accent);">Privadas</span></div>
-          <div class="schedule-item"><span class="schedule-time">11:00 AM - 12:00 M</span><span class="schedule-class" style="color:var(--accent);">Privadas</span></div>
-          <div class="schedule-item"><span class="schedule-time">12:00 M - 01:00 PM</span><span class="schedule-class" style="color:var(--success);">Almuerzo</span></div>
-          <div class="schedule-item"><span class="schedule-time">01:00 PM - 02:00 PM</span><span class="schedule-class" style="color:#a78bfa;">MMA</span></div>
-          <div class="schedule-item"><span class="schedule-time">02:00 PM - 03:00 PM</span><span class="schedule-class" style="color:#f472b6;">Kenpo Karate (Pequeño Ninja - 6 años)</span></div>
-          <div class="schedule-item"><span class="schedule-time">03:00 PM - 04:00 PM</span><span class="schedule-class" style="color:#fb923c;">Kids Kenpo Karate (7-13 años)</span></div>
-          <div class="schedule-item"><span class="schedule-time">04:00 PM - 05:00 PM</span><span class="schedule-class" style="color:#fb7185;">Junior Kenpo Karate (14-17 años)</span></div>
-          <div class="schedule-item"><span class="schedule-time">05:00 PM - 06:00 PM</span><span class="schedule-class" style="color:#e2e8f0;">Adultos Kenpo Karate</span></div>
-          <div class="schedule-item"><span class="schedule-time">06:00 PM - 07:00 PM</span><span class="schedule-class" style="color:#f87171;">Boxeo</span></div>
-          <div class="schedule-item"><span class="schedule-time">07:00 PM - 08:00 PM</span><span class="schedule-class" style="color:#60a5fa;">Kickboxing</span></div>
-          <div class="schedule-item"><span class="schedule-time">08:00 PM - 09:00 PM</span><span class="schedule-class" style="color:#a78bfa;">MMA</span></div>
-        </div>
-
-        <div class="schedule-column">
-          <h3>Martes y Jueves</h3>
-          <div class="schedule-item"><span class="schedule-time">06:00 AM - 07:00 AM</span><span class="schedule-class" style="color:#f87171;">Boxeo</span></div>
-          <div class="schedule-item"><span class="schedule-time">07:00 AM - 08:00 AM</span><span class="schedule-class" style="color:#60a5fa;">Kickboxing</span></div>
-          <div class="schedule-item"><span class="schedule-time">08:00 AM - 09:00 AM</span><span class="schedule-class" style="color:#34d399;">Jiu-Jitsu</span></div>
-          <div class="schedule-item"><span class="schedule-time">10:00 AM - 11:00 AM</span><span class="schedule-class" style="color:var(--accent);">Privadas</span></div>
-          <div class="schedule-item"><span class="schedule-time">11:00 AM - 12:00 M</span><span class="schedule-class" style="color:var(--accent);">Privadas</span></div>
-          <div class="schedule-item"><span class="schedule-time">12:00 M - 01:00 PM</span><span class="schedule-class" style="color:var(--success);">Almuerzo</span></div>
-          <div class="schedule-item"><span class="schedule-time">01:00 PM - 02:00 PM</span><span class="schedule-class" style="color:#34d399;">Jiu-Jitsu</span></div>
-          <div class="schedule-item"><span class="schedule-time">02:00 PM - 03:00 PM</span><span class="schedule-class" style="color:#a78bfa;">MMA</span></div>
-          <div class="schedule-item"><span class="schedule-time">03:00 PM - 04:00 PM</span><span class="schedule-class" style="color:#60a5fa;">Kickboxing</span></div>
-          <div class="schedule-item"><span class="schedule-time">04:00 PM - 05:00 PM</span><span class="schedule-class" style="color:#f472b6;">Combinada Ninjas a Junior Kenpo</span></div>
-          <div class="schedule-item"><span class="schedule-time">05:00 PM - 06:00 PM</span><span class="schedule-class" style="color:#e2e8f0;">Adultos Kenpo Karate</span></div>
-          <div class="schedule-item"><span class="schedule-time">06:00 PM - 07:00 PM</span><span class="schedule-class" style="color:#f87171;">Boxeo</span></div>
-          <div class="schedule-item"><span class="schedule-time">07:00 PM - 08:00 PM</span><span class="schedule-class" style="color:#34d399;">Jiu-Jitsu</span></div>
-          <div class="schedule-item"><span class="schedule-time">08:00 PM - 09:00 PM</span><span class="schedule-class" style="color:#a78bfa;">MMA</span></div>
-        </div>
-
-        <div class="schedule-column">
-          <h3>Sábado</h3>
-          <div class="schedule-item"><span class="schedule-time">06:00 AM - 07:00 AM</span><span class="schedule-class" style="color:#f87171;">Boxeo</span></div>
-          <div class="schedule-item"><span class="schedule-time">07:00 AM - 08:00 AM</span><span class="schedule-class" style="color:#60a5fa;">Kickboxing</span></div>
-          <div class="schedule-item"><span class="schedule-time">08:00 AM - 09:00 AM</span><span class="schedule-class" style="color:#a78bfa;">MMA</span></div>
-          <div class="schedule-item"><span class="schedule-time">09:00 AM - 11:00 AM</span><span class="schedule-class" style="color:#f472b6;">Pequeño Ninja y Kids Kenpo</span></div>
-          <div class="schedule-item"><span class="schedule-time">11:00 AM - 12:00 M</span><span class="schedule-class" style="color:#fb7185;">Junior y Adulto Kenpo Karate</span></div>
-          <div class="schedule-item"><span class="schedule-time">12:00 M - 01:00 PM</span><span class="schedule-class" style="color:var(--success);">Almuerzo</span></div>
-          <div class="schedule-item"><span class="schedule-time">01:00 PM - 02:00 PM</span><span class="schedule-class" style="color:#34d399;">Jiu-Jitsu</span></div>
-          <div class="schedule-item"><span class="schedule-time">02:00 PM - 04:00 PM</span><span class="schedule-class" style="color:#38bdf8;">Open Matt (Tatami Libre)</span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<footer class="motivation-footer">
-  <p class="motivation-text">
-    Entrena hoy, <span class="motivation-highlight">supera tus límites</span>, transforma tu vida.
-  </p>
-</footer>
-
-<div id="overlayDelete" class="overlay">
-  <div class="modal">
-    <h3>¿Seguro que deseas eliminar a este miembro?</h3>
-    <p style="font-size:13.5px;color:var(--text-dim);margin:0 0 10px;">Esta acción borrará permanentemente al miembro <strong id="delMemberLabel" style="color:var(--text);"></strong> y todos sus cobros asignados.</p>
-    <div class="modal-actions">
-      <button class="btn" id="btnCancelDelete">Cancelar</button>
-      <button class="btn btn-danger" id="btnConfirmDelete">Eliminar Miembro</button>
-    </div>
-  </div>
-</div>
-
-<div id="toastBox" class="toast"></div>
-
-<script>
-/* Datos Iniciales Básicos */
-const DEFAULT_MEMB_TYPES = [
-  { id: 'm_matricula', nombre: 'Matrícula Anual', precio: 1500, duracionDias: 365 },
-  { id: 'm_todas', nombre: 'Todas las Disciplinas', precio: 1600, duracionDias: 30 },
-  { id: 'm_kenpo', nombre: 'Kenpo Karate', precio: 1500, duracionDias: 30 },
-  { id: 'm_mma', nombre: 'MMA', precio: 1400, duracionDias: 30 },
-  { id: 'm_boxeo', nombre: 'Boxeo', precio: 1200, duracionDias: 30 },
-  { id: 'm_jiujitsu', nombre: 'Jiu-Jitsu', precio: 1200, duracionDias: 30 },
-  { id: 'm_kickboxing', nombre: 'Kickboxing', precio: 1200, duracionDias: 30 },
-  { id: 'm_defensa', nombre: 'Defensa Personal', precio: 1200, duracionDias: 30 },
-  { id: 'm_privadas', nombre: 'Clases Privadas Personales', precio: 2500, duracionDias: 30 }
-];
-
-const DEFAULT_EXTRA_TYPES = [
-  { id: 'e_casillero', nombre: 'Casillero (locker)', precio: 100 },
-  { id: 'e_entrenador', nombre: 'Entrenador personal', precio: 400 },
-  { id: 'e_nutricion', nombre: 'Plan nutricional', precio: 300 }
-];
-
-const OBJETIVOS = [
-  {
-    id: 'principiante',
-    nombre: 'Principiante / recién empieza',
-    plan: {
-      titulo: 'Plan de Adaptación y Técnica',
-      desc: 'Enfoque en familiarización de movimientos básicos y preparación física.',
-      puntos: [
-        'Enfoque en dominar la postura básica y el juego de pies.',
-        'Acondicionamiento físico de baja intensidad para resistencia cardiovascular.',
-        'Rutinas suaves de estiramiento y movilidad articular.',
-        'Monitoreo constante del esfuerzo y ritmo personal.'
-      ]
-    }
-  },
-  {
-    id: 'per_peso',
-    nombre: 'Pérdida de peso',
-    plan: {
-      titulo: 'Rutina Enfoque Quema de Grasa',
-      desc: 'Enfocada en gasto calórico elevado y preservación muscular.',
-      puntos: [
-        'Frecuencia recomendada: 3 a 4 días por semana de entrenamiento de alta intensidad.',
-        'Entrenamiento de fuerza para conservar masa muscular metabólicamente activa.',
-        'Cardio moderado o HIIT opcional después de las sesiones primarias.',
-        'Acompañamiento de un déficit calórico y plan nutricional.'
-      ]
-    }
-  },
-  {
-    id: 'gan_musculo',
-    nombre: 'Ganancia muscular (hipertrofia)',
-    plan: {
-      titulo: 'Rutina Enfoque Hipertrofia',
-      desc: 'Enfocada en tensión mecánica y sobrecarga progresiva.',
-      puntos: [
-        'Frecuencia recomendada: 4 a 5 días por semana enfocando grupos musculares.',
-        'Rango de repeticiones de 8 a 12 de forma controlada cerca del fallo.',
-        'Suficiente tiempo de descanso entre series (de 1.5 a 2 minutos).',
-        'Consumo proteico y calórico adecuado para fomentar la síntesis muscular.'
-      ]
-    }
-  },
-  {
-    id: 'rendimiento',
-    nombre: 'Rendimiento / atleta',
-    plan: {
-      titulo: 'Plan de Alto Rendimiento y Potencia',
-      desc: 'Desarrollo de cualidades atléticas avanzadas: potencia, agilidad y fuerza explosiva.',
-      puntos: [
-        'Ejercicios de pliometría, velocidad de reacción y agilidad dinámica.',
-        'Períodos de carga alta para desarrollo de fuerza máxima y potencia muscular.',
-        'Estrategias optimizadas de recuperación activa y prevención de sobrecargas.',
-        'Ejercicios específicos que simulen el entorno deportivo real.'
-      ]
-    }
-  },
-  {
-    id: 'adulto_mayor',
-    nombre: 'Adulto mayor',
-    plan: {
-      titulo: 'Plan Salud Activa y Vitalidad',
-      desc: 'Orientado a la mejora de la movilidad, fuerza funcional y el equilibrio dinámico.',
-      puntos: [
-        'Fuerza ligera usando peso corporal, bandas de resistencia o mancuernas livianas.',
-        'Ejercicios específicos de equilibrio estático/dinámico para prevención de caídas.',
-        'Estiramientos activos para mejorar la flexibilidad en articulaciones clave.',
-        'Intensidad moderada con descansos amplios adaptados a cada usuario.'
-      ]
-    }
-  },
-  {
-    id: 'rehabilitacion',
-    nombre: 'Rehabilitación / lesión',
-    plan: {
-      titulo: 'Plan de Recuperación Funcional',
-      desc: 'Rutina cuidadosa de fortalecimiento y restauración de la movilidad en zonas afectadas.',
-      puntos: [
-        'Movimientos de bajo impacto enfocados en restaurar arcos de movilidad naturales.',
-        'Fortalecimiento progresivo de músculos estabilizadores de la zona lesionada.',
-        'Evitar el dolor agudo y seguir estrictamente las indicaciones de profesionales.',
-        'Trabajo complementario de flexibilidad y estabilidad articular.'
-      ]
-    }
-  },
-  {
-    id: 'embarazo',
-    nombre: 'Embarazo (con autorización médica)',
-    plan: {
-      titulo: 'Plan Maternidad Activa',
-      desc: 'Ejercicios seguros y adaptados para mantener la condición física durante el embarazo.',
-      puntos: [
-        'Ejercicios aeróbicos de bajo impacto (caminar, bicicleta estática o natación).',
-        'Fortalecimiento del suelo pélvico, espalda y zona lumbar de forma segura.',
-        'Evitar aguantar la respiración (Valsalva) y mantener hidratación constante.',
-        'Evitar movimientos bruscos, impactos directos o posiciones incómodas.'
-      ]
-    }
-  }
-];
-
-let data = {
-  members: [],
-  membershipTypes: [],
-  extraTypes: []
-};
-
-/* Funciones Auxiliares */
-function formatLempiras(num) {
-  return Number(num).toFixed(2);
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.toString()
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-function todayISO() {
-  return new Date().toISOString().split('T')[0];
-}
-
-function addDays(dateStr, days) {
-  const d = new Date(dateStr + 'T12:00:00');
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
-}
-
-function fmtDate(dateStr) {
-  if(!dateStr) return '—';
-  const parts = dateStr.split('-');
-  if(parts.length !== 3) return dateStr;
-  return parts[2] + '/' + parts[1] + '/' + parts[0];
-}
-
-function membTypeById(id) {
-  return data.membershipTypes.find(function(t) { return t.id === id; });
-}
-
-function extraTypeById(id) {
-  return data.extraTypes.find(function(t) { return t.id === id; });
-}
-
-function objetivoById(id) {
-  return OBJETIVOS.find(function(o) { return o.id === id; });
 }
 
 function memberStatus(m) {
@@ -815,28 +77,23 @@ function renderResumen() {
       vencidos++;
     }
     
-    // Sumar ingresos calculando los pagos reales (ya considerando descuentos aplicados al momento de registrarse)
-    if(m.pagos && m.pagos.length > 0) {
-      m.pagos.forEach(function(p) {
-        if(p.fecha && p.fecha.substring(0, 7) === currentMonth) {
-          ingresosMes += (Number(p.monto) || 0);
-        }
-      });
-    } else {
-      // Compatibilidad por si hay registros viejos sin arreglo de pagos
-      if(m.fechaInicio && m.fechaInicio.substring(0, 7) === currentMonth) {
-        const mt = membTypeById(m.membresiaId);
-        if(mt) {
-          const desc = Number(m.descuento) || 0;
-          ingresosMes += Math.max(0, mt.precio - desc);
-        }
-      }
+    if(m.fechaInicio && m.fechaInicio.substring(0, 7) === currentMonth) {
+      const mt = membTypeById(m.membresiaId);
+      if(mt) ingresosMes += Number(mt.precio);
     }
     
     if(m.extras) {
       m.extras.forEach(function(ex) {
         if(ex.fecha && ex.fecha.substring(0, 7) === currentMonth) {
           ingresosMes += Number(ex.costo);
+        }
+      });
+    }
+
+    if(m.pagos) {
+      m.pagos.forEach(function(p) {
+        if(p.fecha && p.fecha.substring(0, 7) === currentMonth) {
+          ingresosMes += Number(p.monto);
         }
       });
     }
@@ -918,25 +175,31 @@ function renderMembers() {
       }
     }
     
-    // Si tiene descuento, lo muestra al lado del tipo de membresía
-    const descInfo = (m.descuento && m.descuento > 0) ? ` <span style="color:var(--danger); font-size:11px;">(-L.${m.descuento})</span>` : '';
     const badgeClass = status === 'ACTIVO' ? 'badge activo' : 'badge vencido';
     const badgeText = status === 'ACTIVO' ? 'Al día' : 'Vencido';
     
     body.innerHTML += '<tr>' +
       '<td>' + escapeHtml(m.nombre) + extrasChips + '</td>' +
       '<td class="mono">' + escapeHtml(m.telefono || '—') + '</td>' +
-      '<td>' + (t ? escapeHtml(t.nombre) : '—') + descInfo + '</td>' +
+      '<td>' + (t ? escapeHtml(t.nombre) : '—') + '</td>' +
       '<td>' + (o ? escapeHtml(o.nombre) : '—') + '</td>' +
       '<td class="mono">' + fmtDate(m.fechaVencimiento) + '</td>' +
       '<td><span class="' + badgeClass + '">' + badgeText + '</span></td>' +
-      '<td><button class="btn btn-sm btn-danger" data-del="' + m.id + '">Eliminar</button></td>' +
+      '<td class="btn-row">' +
+        '<button class="btn btn-sm btn-primary" data-renov="' + m.id + '">Renovar</button>' +
+        '<button class="btn btn-sm btn-danger" data-del="' + m.id + '">Eliminar</button>' +
+      '</td>' +
     '</tr>';
   });
   
   body.querySelectorAll('[data-del]').forEach(function(btn) {
     btn.addEventListener('click', function() {
       openDeleteModal(btn.getAttribute('data-del'));
+    });
+  });
+  body.querySelectorAll('[data-renov]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      openRenovarModal(btn.getAttribute('data-renov'));
     });
   });
 }
@@ -1037,7 +300,6 @@ document.getElementById('btnAddMember').addEventListener('click', async function
   const fechaInicio = document.getElementById('mFechaInicio').value || todayISO();
   const membresiaId = document.getElementById('mMembresia').value;
   const objetivoId = document.getElementById('mObjetivo').value;
-  const descuento = Number(document.getElementById('mDescuento').value) || 0;
 
   if(!nombre || !membresiaId) {
     showToast('El nombre y el tipo de membresía son obligatorios.', true);
@@ -1045,9 +307,6 @@ document.getElementById('btnAddMember').addEventListener('click', async function
   }
   const t = membTypeById(membresiaId);
   const fechaVencimiento = addDays(fechaInicio, t.duracionDias);
-
-  // El monto cobrado es el precio menos el descuento aplicado (no puede ser menor a 0)
-  const montoCobrado = Math.max(0, Number(t.precio) - descuento);
 
   data.members.push({
     id: 'm_' + Date.now() + '_' + Math.floor(Math.random()*1000),
@@ -1057,26 +316,20 @@ document.getElementById('btnAddMember').addEventListener('click', async function
     fechaVencimiento: fechaVencimiento,
     membresiaId: membresiaId,
     objetivoId: objetivoId,
-    descuento: descuento,
-    extras: [],
-    pagos: [{ fecha: fechaInicio, monto: montoCobrado }]
+    extras: []
   });
 
   await saveData();
   renderAll();
   showToast('Miembro registrado correctamente.');
-  
-  // Limpiar campos
   document.getElementById('mNombre').value = '';
   document.getElementById('mTelefono').value = '';
-  document.getElementById('mDescuento').value = '0';
   document.getElementById('mFechaInicio').value = todayISO();
 });
 
 document.getElementById('btnClearMember').addEventListener('click', function() {
   document.getElementById('mNombre').value = '';
   document.getElementById('mTelefono').value = '';
-  document.getElementById('mDescuento').value = '0';
   document.getElementById('mFechaInicio').value = todayISO();
 });
 
@@ -1149,6 +402,78 @@ document.getElementById('btnAddExtraType').addEventListener('click', async funct
   showToast('Extra agregado al catálogo.');
 });
 
+/* Control de Renovación de Membresía */
+let pendingRenovarId = null;
+
+function openRenovarModal(id) {
+  const m = data.members.find(function(x) { return x.id === id; });
+  if(!m) return;
+  pendingRenovarId = id;
+
+  document.getElementById('renovMemberLabel').textContent = m.nombre;
+  document.getElementById('renovVenceActual').textContent = fmtDate(m.fechaVencimiento);
+  document.getElementById('renovFecha').value = todayISO();
+
+  const sel = document.getElementById('renovMembresia');
+  let opts = '';
+  data.membershipTypes.forEach(function(t) {
+    const selected = t.id === m.membresiaId ? ' selected' : '';
+    opts += '<option value="' + t.id + '"' + selected + '>' + escapeHtml(t.nombre) + ' — L. ' + formatLempiras(t.precio) + ' (' + t.duracionDias + ' días)</option>';
+  });
+  sel.innerHTML = opts;
+
+  updateRenovarPreview();
+  document.getElementById('overlayRenovar').classList.add('show');
+}
+
+function updateRenovarPreview() {
+  const m = data.members.find(function(x) { return x.id === pendingRenovarId; });
+  if(!m) return;
+  const t = membTypeById(document.getElementById('renovMembresia').value);
+  if(!t) return;
+
+  const today = todayISO();
+  const base = m.fechaVencimiento > today ? m.fechaVencimiento : today;
+  const nuevaFecha = addDays(base, t.duracionDias);
+  document.getElementById('renovPreview').textContent =
+    'La membresía quedará vigente hasta el ' + fmtDate(nuevaFecha) +
+    (m.fechaVencimiento > today ? ' (se suma a los días que le quedaban).' : ' (empieza a contar desde hoy porque ya estaba vencida).');
+}
+
+document.getElementById('renovMembresia').addEventListener('change', updateRenovarPreview);
+document.getElementById('renovFecha').addEventListener('change', updateRenovarPreview);
+
+document.getElementById('btnCancelRenovar').addEventListener('click', function() {
+  document.getElementById('overlayRenovar').classList.remove('show');
+  pendingRenovarId = null;
+});
+
+document.getElementById('btnConfirmRenovar').addEventListener('click', async function() {
+  const m = data.members.find(function(x) { return x.id === pendingRenovarId; });
+  if(!m) return;
+
+  const t = membTypeById(document.getElementById('renovMembresia').value);
+  const fechaPago = document.getElementById('renovFecha').value || todayISO();
+  if(!t) { showToast('Selecciona un tipo de membresía válido.', true); return; }
+
+  const base = m.fechaVencimiento > fechaPago ? m.fechaVencimiento : fechaPago;
+  m.fechaVencimiento = addDays(base, t.duracionDias);
+  m.membresiaId = t.id;
+
+  if(!m.pagos) m.pagos = [];
+  m.pagos.push({
+    fecha: fechaPago,
+    monto: t.precio,
+    membresiaId: t.id
+  });
+
+  await saveData();
+  renderAll();
+  document.getElementById('overlayRenovar').classList.remove('show');
+  showToast('Pago registrado. ' + m.nombre + ' queda al día hasta el ' + fmtDate(m.fechaVencimiento) + '.');
+  pendingRenovarId = null;
+});
+
 /* Control de Eliminación */
 let pendingDeleteId = null;
 
@@ -1173,7 +498,7 @@ document.getElementById('btnConfirmDelete').addEventListener('click', async func
   pendingDeleteId = null;
 });
 
-/* Exportar a un archivo Excel (.xlsx) nativo */
+/* Exportar Excel */
 document.getElementById('btnExport').addEventListener('click', function() {
   if (data.members.length === 0) {
     showToast('No hay miembros registrados para exportar.', true);
@@ -1201,14 +526,13 @@ document.getElementById('btnExport').addEventListener('click', function() {
       'Nombre Completo': m.nombre,
       'Teléfono': m.telefono || '—',
       'Tipo de Membresía': t ? t.nombre : '—',
-      'Descuento Aplicado (L.)': m.descuento || 0,
-      'Monto Membresía Final (L.)': t ? Math.max(0, t.precio - (m.descuento || 0)) : 0,
       'Tipo de Persona / Objetivo': o ? o.nombre : '—',
       'Fecha de Inicio': m.fechaInicio,
       'Fecha de Vencimiento': m.fechaVencimiento,
       'Estado Actual': memberStatus(m) === 'ACTIVO' ? 'Al día' : 'Vencido',
       'Cargos Extras (L.)': extrasTotal,
-      'Total Pagado en el Mes (L.)': pagosTotal + extrasTotal
+      'Total Pagado en Renovaciones (L.)': pagosTotal,
+      'Último Pago': ultimoPago
     };
   });
 
