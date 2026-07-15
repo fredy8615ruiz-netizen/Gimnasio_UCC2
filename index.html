@@ -558,6 +558,29 @@
   </p>
 </footer>
 
+<!-- Modal Renovar Membresía -->
+<div id="overlayRenovar" class="overlay">
+  <div class="modal">
+    <h3>Renovar membresía</h3>
+    <p style="font-size:13.5px;color:var(--text-dim);margin:0 0 14px;">Registrando el pago de <strong id="renovMemberLabel" style="color:var(--text);"></strong>. Vence actualmente el <strong id="renovVenceActual" style="color:var(--text);"></strong>.</p>
+    <div class="form-grid">
+      <div>
+        <label>Tipo de membresía a pagar</label>
+        <select id="renovMembresia"></select>
+      </div>
+      <div>
+        <label>Fecha de pago</label>
+        <input type="date" id="renovFecha">
+      </div>
+    </div>
+    <p class="warn-text" id="renovPreview" style="margin-top:2px;"></p>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelRenovar">Cancelar</button>
+      <button class="btn btn-primary" id="btnConfirmRenovar">Confirmar pago y renovar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Eliminar -->
 <div id="overlayDelete" class="overlay">
   <div class="modal">
@@ -589,7 +612,7 @@ const DEFAULT_MEMB_TYPES = [
 
 const DEFAULT_EXTRA_TYPES = [
   { id: 'e_casillero', nombre: 'Casillero (locker)', precio: 200 },
-
+  
   { id: 'e_nutricion', nombre: 'Plan nutricional', precio: 300 }
 ];
 
@@ -833,6 +856,14 @@ function renderResumen() {
         }
       });
     }
+
+    if(m.pagos) {
+      m.pagos.forEach(function(p) {
+        if(p.fecha && p.fecha.substring(0, 7) === currentMonth) {
+          ingresosMes += Number(p.monto);
+        }
+      });
+    }
     
     const limit = addDays(today, 7);
     if(m.fechaVencimiento <= limit) {
@@ -921,13 +952,21 @@ function renderMembers() {
       '<td>' + (o ? escapeHtml(o.nombre) : '—') + '</td>' +
       '<td class="mono">' + fmtDate(m.fechaVencimiento) + '</td>' +
       '<td><span class="' + badgeClass + '">' + badgeText + '</span></td>' +
-      '<td><button class="btn btn-sm btn-danger" data-del="' + m.id + '">Eliminar</button></td>' +
+      '<td class="btn-row">' +
+        '<button class="btn btn-sm btn-primary" data-renov="' + m.id + '">Renovar</button>' +
+        '<button class="btn btn-sm btn-danger" data-del="' + m.id + '">Eliminar</button>' +
+      '</td>' +
     '</tr>';
   });
   
   body.querySelectorAll('[data-del]').forEach(function(btn) {
     btn.addEventListener('click', function() {
       openDeleteModal(btn.getAttribute('data-del'));
+    });
+  });
+  body.querySelectorAll('[data-renov]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      openRenovarModal(btn.getAttribute('data-renov'));
     });
   });
 }
@@ -1130,6 +1169,78 @@ document.getElementById('btnAddExtraType').addEventListener('click', async funct
   showToast('Extra agregado al catálogo.');
 });
 
+/* Control de Renovación de Membresía */
+let pendingRenovarId = null;
+
+function openRenovarModal(id) {
+  const m = data.members.find(function(x) { return x.id === id; });
+  if(!m) return;
+  pendingRenovarId = id;
+
+  document.getElementById('renovMemberLabel').textContent = m.nombre;
+  document.getElementById('renovVenceActual').textContent = fmtDate(m.fechaVencimiento);
+  document.getElementById('renovFecha').value = todayISO();
+
+  const sel = document.getElementById('renovMembresia');
+  let opts = '';
+  data.membershipTypes.forEach(function(t) {
+    const selected = t.id === m.membresiaId ? ' selected' : '';
+    opts += '<option value="' + t.id + '"' + selected + '>' + escapeHtml(t.nombre) + ' — L. ' + formatLempiras(t.precio) + ' (' + t.duracionDias + ' días)</option>';
+  });
+  sel.innerHTML = opts;
+
+  updateRenovarPreview();
+  document.getElementById('overlayRenovar').classList.add('show');
+}
+
+function updateRenovarPreview() {
+  const m = data.members.find(function(x) { return x.id === pendingRenovarId; });
+  if(!m) return;
+  const t = membTypeById(document.getElementById('renovMembresia').value);
+  if(!t) return;
+
+  const today = todayISO();
+  const base = m.fechaVencimiento > today ? m.fechaVencimiento : today;
+  const nuevaFecha = addDays(base, t.duracionDias);
+  document.getElementById('renovPreview').textContent =
+    'La membresía quedará vigente hasta el ' + fmtDate(nuevaFecha) +
+    (m.fechaVencimiento > today ? ' (se suma a los días que le quedaban).' : ' (empieza a contar desde hoy porque ya estaba vencida).');
+}
+
+document.getElementById('renovMembresia').addEventListener('change', updateRenovarPreview);
+document.getElementById('renovFecha').addEventListener('change', updateRenovarPreview);
+
+document.getElementById('btnCancelRenovar').addEventListener('click', function() {
+  document.getElementById('overlayRenovar').classList.remove('show');
+  pendingRenovarId = null;
+});
+
+document.getElementById('btnConfirmRenovar').addEventListener('click', async function() {
+  const m = data.members.find(function(x) { return x.id === pendingRenovarId; });
+  if(!m) return;
+
+  const t = membTypeById(document.getElementById('renovMembresia').value);
+  const fechaPago = document.getElementById('renovFecha').value || todayISO();
+  if(!t) { showToast('Selecciona un tipo de membresía válido.', true); return; }
+
+  const base = m.fechaVencimiento > fechaPago ? m.fechaVencimiento : fechaPago;
+  m.fechaVencimiento = addDays(base, t.duracionDias);
+  m.membresiaId = t.id;
+
+  if(!m.pagos) m.pagos = [];
+  m.pagos.push({
+    fecha: fechaPago,
+    monto: t.precio,
+    membresiaId: t.id
+  });
+
+  await saveData();
+  renderAll();
+  document.getElementById('overlayRenovar').classList.remove('show');
+  showToast('Pago registrado. ' + m.nombre + ' queda al día hasta el ' + fmtDate(m.fechaVencimiento) + '.');
+  pendingRenovarId = null;
+});
+
 /* Control de Eliminación */
 let pendingDeleteId = null;
 
@@ -1170,6 +1281,13 @@ document.getElementById('btnExport').addEventListener('click', function() {
         extrasTotal += (Number(e.costo) || 0);
       });
     }
+
+    let pagosTotal = 0;
+    let ultimoPago = '—';
+    if(m.pagos && m.pagos.length > 0) {
+      m.pagos.forEach(function(p) { pagosTotal += (Number(p.monto) || 0); });
+      ultimoPago = m.pagos[m.pagos.length - 1].fecha;
+    }
     
     return {
       'Nombre Completo': m.nombre,
@@ -1179,7 +1297,9 @@ document.getElementById('btnExport').addEventListener('click', function() {
       'Fecha de Inicio': m.fechaInicio,
       'Fecha de Vencimiento': m.fechaVencimiento,
       'Estado Actual': memberStatus(m) === 'ACTIVO' ? 'Al día' : 'Vencido',
-      'Cargos Extras (L.)': extrasTotal
+      'Cargos Extras (L.)': extrasTotal,
+      'Total Pagado en Renovaciones (L.)': pagosTotal,
+      'Último Pago': ultimoPago
     };
   });
 
