@@ -5,6 +5,8 @@
 <title>Sistema de Gimnasio - UCC Team Lunáticos</title>
 <!-- Librería externa para exportar a Excel real (.xlsx) -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- Cliente de Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
     --bg:#12100e; --panel:#1c1815; --panel-2:#241f1a;
@@ -426,6 +428,35 @@
           <select id="mObjetivo"></select>
         </div>
       </div>
+
+      <h3 style="margin:20px 0 10px;font-size:14px;">Promoción o Descuento (opcional)</h3>
+      <div class="form-grid">
+        <div>
+          <label>Tipo de descuento</label>
+          <select id="mDescuentoTipo">
+            <option value="ninguno">Sin descuento</option>
+            <option value="codigo">Código promocional</option>
+            <option value="manual">Descuento manual</option>
+          </select>
+        </div>
+        <div id="mCodigoWrap" style="display:none;">
+          <label>Código / Promoción</label>
+          <select id="mPromoCodigo"></select>
+        </div>
+        <div id="mManualTipoWrap" style="display:none;">
+          <label>Tipo</label>
+          <select id="mManualTipo">
+            <option value="porcentaje">Porcentaje (%)</option>
+            <option value="monto">Monto fijo (L.)</option>
+          </select>
+        </div>
+        <div id="mManualValorWrap" style="display:none;">
+          <label>Valor del descuento</label>
+          <input type="number" id="mManualValor" placeholder="Ej. 10" min="0">
+        </div>
+      </div>
+      <p class="warn-text" id="mDescuentoPreview" style="margin-top:2px;"></p>
+
       <div id="mPlanPreview"></div>
       <div class="btn-row" style="margin-top:20px;">
         <button class="btn btn-primary" id="btnAddMember">Registrar Miembro</button>
@@ -483,6 +514,29 @@
         <input type="number" id="newExtraPrice" placeholder="Precio (L.)">
       </div>
       <button class="btn btn-primary btn-sm" id="btnAddExtraType">Añadir Extra</button>
+    </div>
+
+    <div class="panel">
+      <h2>Promociones y Descuentos</h2>
+      <div id="promoCatalog"></div>
+
+      <h3 style="margin:24px 0 10px;font-size:14px;">Crear Nueva Promoción</h3>
+      <div class="form-grid">
+        <input type="text" id="newPromoNombre" placeholder="Nombre (Ej. Descuento Verano)">
+        <input type="text" id="newPromoCodigo" placeholder="Código (opcional, Ej. VERANO20)">
+        <select id="newPromoTipo">
+          <option value="porcentaje">Porcentaje (%)</option>
+          <option value="monto">Monto fijo (L.)</option>
+        </select>
+        <input type="number" id="newPromoValor" placeholder="Valor del descuento" min="0">
+        <select id="newPromoAplicaA">
+          <option value="ambas">Matrícula y Mensualidad</option>
+          <option value="matricula">Solo Matrícula</option>
+          <option value="mensualidad">Solo Mensualidad</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-sm" id="btnAddPromo">Crear Promoción</button>
+      <p class="warn-text">Las promociones "Solo Matrícula" aparecen al elegir el tipo de membresía "Matrícula"; el resto se consideran mensualidades.</p>
     </div>
   </div>
 
@@ -571,6 +625,29 @@
       <div>
         <label>Fecha de pago</label>
         <input type="date" id="renovFecha">
+      </div>
+      <div>
+        <label>Tipo de descuento</label>
+        <select id="renovDescuentoTipo">
+          <option value="ninguno">Sin descuento</option>
+          <option value="codigo">Código promocional</option>
+          <option value="manual">Descuento manual</option>
+        </select>
+      </div>
+      <div id="renovCodigoWrap" style="display:none;">
+        <label>Código / Promoción</label>
+        <select id="renovPromoCodigo"></select>
+      </div>
+      <div id="renovManualTipoWrap" style="display:none;">
+        <label>Tipo</label>
+        <select id="renovManualTipo">
+          <option value="porcentaje">Porcentaje (%)</option>
+          <option value="monto">Monto fijo (L.)</option>
+        </select>
+      </div>
+      <div id="renovManualValorWrap" style="display:none;">
+        <label>Valor del descuento</label>
+        <input type="number" id="renovManualValor" placeholder="Ej. 10" min="0">
       </div>
     </div>
     <p class="warn-text" id="renovPreview" style="margin-top:2px;"></p>
@@ -720,7 +797,8 @@ const OBJETIVOS = [
 let data = {
   members: [],
   membershipTypes: [],
-  extraTypes: []
+  extraTypes: [],
+  promotions: []
 };
 
 /* Funciones Auxiliares */
@@ -763,6 +841,34 @@ function extraTypeById(id) {
   return data.extraTypes.find(function(t) { return t.id === id; });
 }
 
+function promoById(id) {
+  return data.promotions.find(function(p) { return p.id === id; });
+}
+
+/* Determina si un tipo de membresía se considera "matrícula" o "mensualidad" para efectos de promociones */
+function categoriaMembresia(membType) {
+  if(!membType) return 'mensualidad';
+  return membType.nombre.toLowerCase().indexOf('matr') !== -1 ? 'matricula' : 'mensualidad';
+}
+
+function promosAplicables(categoria) {
+  return data.promotions.filter(function(p) {
+    return p.activo !== false && (p.aplicaA === 'ambas' || p.aplicaA === categoria);
+  });
+}
+
+/* Calcula el descuento (en Lempiras) dado un precio original y una configuración de descuento */
+function calcularDescuento(precioOriginal, tipoDescuento, valor) {
+  precioOriginal = Number(precioOriginal) || 0;
+  valor = Number(valor) || 0;
+  if(tipoDescuento === 'porcentaje') {
+    return Math.min(precioOriginal, (precioOriginal * valor) / 100);
+  } else if(tipoDescuento === 'monto') {
+    return Math.min(precioOriginal, valor);
+  }
+  return 0;
+}
+
 function objetivoById(id) {
   return OBJETIVOS.find(function(o) { return o.id === id; });
 }
@@ -772,37 +878,105 @@ function memberStatus(m) {
   return m.fechaVencimiento >= today ? 'ACTIVO' : 'VENCIDO';
 }
 
+/* ====== Configuración de Supabase ======
+   1. Ve a tu proyecto en supabase.com -> Project Settings -> API
+   2. Copia "Project URL" y pégala abajo en SUPABASE_URL
+   3. Copia "anon public key" y pégala abajo en SUPABASE_ANON_KEY
+   4. Corre el SQL de creación de la tabla "gym_state" (ver instrucciones que te dieron aparte)
+*/
+const SUPABASE_URL = 'https://exkchavcifeuhhvmvivd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4a2NoYXZjaWZldWhodm12aXZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzMDgwMjksImV4cCI6MjA5OTg4NDAyOX0.Qf23nMZcrzNmay2ouDHjTxEP0lSvSPU_WH29mIl2-3o';
+const GYM_ROW_ID = 'ucc_lunaticos';
+
+let supabaseClient = null;
+if (SUPABASE_URL.indexOf('PEGA_AQUI') === -1 && SUPABASE_ANON_KEY.indexOf('PEGA_AQUI') === -1) {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+function setSyncDot(state) {
+  // state: 'ok' | 'saving' | 'error'
+  const dot = document.querySelector('.dot');
+  if(!dot) return;
+  if(state === 'saving') dot.className = 'dot saving';
+  else if(state === 'error') dot.className = 'dot error';
+  else dot.className = 'dot';
+}
+
 /* Base de Datos (Carga y Guardado) */
 async function loadData() {
-  const stored = localStorage.getItem('ucc_gym_data');
-  if(stored) {
+  if(!supabaseClient) {
+    showToast('Falta configurar Supabase (SUPABASE_URL / SUPABASE_ANON_KEY). Usando guardado local mientras tanto.', true);
+    const stored = localStorage.getItem('ucc_gym_data');
+    if(stored) {
+      try { data = JSON.parse(stored); } catch(e) { console.error(e); }
+    }
+  } else {
     try {
-      data = JSON.parse(stored);
+      const { data: rows, error } = await supabaseClient
+        .from('gym_state')
+        .select('data')
+        .eq('id', GYM_ROW_ID)
+        .maybeSingle();
+
+      if(error) throw error;
+
+      if(rows && rows.data) {
+        data = rows.data;
+      } else {
+        // No existe fila todavía en Supabase: intenta migrar lo que haya en localStorage (uso previo)
+        const stored = localStorage.getItem('ucc_gym_data');
+        if(stored) {
+          try { data = JSON.parse(stored); } catch(e) { console.error(e); }
+        }
+      }
     } catch(e) {
       console.error(e);
+      setSyncDot('error');
+      showToast('No se pudo conectar a Supabase. Revisa tu internet o la configuración.', true);
+      const stored = localStorage.getItem('ucc_gym_data');
+      if(stored) {
+        try { data = JSON.parse(stored); } catch(e2) { console.error(e2); }
+      }
     }
   }
-  
+
   data.membershipTypes = DEFAULT_MEMB_TYPES;
   data.extraTypes = DEFAULT_EXTRA_TYPES;
-  
+
   if(!data.members) {
     data.members = [];
   }
-  
+  if(!data.promotions) {
+    data.promotions = [];
+  }
+
   await saveData();
   renderAll();
 }
 
 async function saveData() {
-  const dot = document.querySelector('.dot');
-  if(dot) dot.className = 'dot saving';
-  
+  setSyncDot('saving');
+
+  // Siempre dejamos una copia local como respaldo offline
   localStorage.setItem('ucc_gym_data', JSON.stringify(data));
-  
-  setTimeout(function() {
-    if(dot) dot.className = 'dot';
-  }, 400);
+
+  if(!supabaseClient) {
+    setSyncDot('error');
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from('gym_state')
+      .upsert({ id: GYM_ROW_ID, data: data, updated_at: new Date().toISOString() });
+
+    if(error) throw error;
+    setTimeout(function() { setSyncDot('ok'); }, 300);
+  } catch(e) {
+    console.error(e);
+    setSyncDot('error');
+    showToast('No se pudo guardar en la nube (se guardó una copia local).', true);
+  }
 }
 
 /* Alertas Toast */
@@ -1004,7 +1178,47 @@ function populateSelects() {
   });
   eTipo.innerHTML = eOptions;
 
+  populatePromoCodigoSelect();
   updatePlanPreview();
+  updateDescuentoPreview();
+}
+
+/* Llena el select de códigos promocionales según el tipo de membresía elegido en "Nuevo Miembro" */
+function populatePromoCodigoSelect() {
+  const sel = document.getElementById('mPromoCodigo');
+  if(!sel) return;
+  const t = membTypeById(document.getElementById('mMembresia').value);
+  const categoria = categoriaMembresia(t);
+  const promos = promosAplicables(categoria);
+  let opts = '';
+  promos.forEach(function(p) {
+    const valorTxt = p.tipo === 'porcentaje' ? (p.valor + '%') : ('L. ' + formatLempiras(p.valor));
+    opts += '<option value="' + p.id + '">' + escapeHtml(p.nombre) + (p.codigo ? ' [' + escapeHtml(p.codigo) + ']' : '') + ' — ' + valorTxt + '</option>';
+  });
+  sel.innerHTML = opts || '<option value="">No hay promociones disponibles</option>';
+}
+
+function updateDescuentoPreview() {
+  const box = document.getElementById('mDescuentoPreview');
+  if(!box) return;
+  const t = membTypeById(document.getElementById('mMembresia').value);
+  if(!t) { box.textContent = ''; return; }
+  const tipoDescuento = document.getElementById('mDescuentoTipo').value;
+  let descuento = 0;
+  if(tipoDescuento === 'codigo') {
+    const p = promoById(document.getElementById('mPromoCodigo').value);
+    if(p) descuento = calcularDescuento(t.precio, p.tipo, p.valor);
+  } else if(tipoDescuento === 'manual') {
+    const mTipo = document.getElementById('mManualTipo').value;
+    const mValor = document.getElementById('mManualValor').value;
+    descuento = calcularDescuento(t.precio, mTipo, mValor);
+  }
+  const finalPrice = t.precio - descuento;
+  if(descuento > 0) {
+    box.textContent = 'Precio de "' + t.nombre + '": L. ' + formatLempiras(t.precio) + ' — Descuento: L. ' + formatLempiras(descuento) + ' — Total a pagar: L. ' + formatLempiras(finalPrice);
+  } else {
+    box.textContent = 'Precio de "' + t.nombre + '": L. ' + formatLempiras(t.precio);
+  }
 }
 
 function updatePlanPreview() {
@@ -1044,6 +1258,58 @@ function renderCatalog() {
     '</div>';
   });
   ec.innerHTML = ecHtml || '<p class="warn-text">Sin extras registrados.</p>';
+
+  renderPromoCatalog();
+}
+
+const APLICA_A_LABEL = {
+  ambas: 'Matrícula y Mensualidad',
+  matricula: 'Solo Matrícula',
+  mensualidad: 'Solo Mensualidad'
+};
+
+function renderPromoCatalog() {
+  const pc = document.getElementById('promoCatalog');
+  if(!pc) return;
+  let html = '';
+  data.promotions.forEach(function(p) {
+    const activo = p.activo !== false;
+    const valorTxt = p.tipo === 'porcentaje' ? (p.valor + '%') : ('L. ' + formatLempiras(p.valor));
+    html += '<div class="catalog-row" style="align-items:center;">' +
+      '<span class="name">' +
+        escapeHtml(p.nombre) +
+        (p.codigo ? ' <span class="mono" style="color:var(--accent);">[' + escapeHtml(p.codigo) + ']</span>' : '') +
+        ' <span style="color:var(--text-faint);font-size:12px">(' + APLICA_A_LABEL[p.aplicaA] + ')</span>' +
+        (activo ? '' : ' <span class="badge vencido">Inactiva</span>') +
+      '</span>' +
+      '<span class="price">' + valorTxt + '</span>' +
+      '<span class="btn-row" style="margin-left:10px;">' +
+        '<button class="btn btn-sm" data-toggle-promo="' + p.id + '">' + (activo ? 'Desactivar' : 'Activar') + '</button>' +
+        '<button class="btn btn-sm btn-danger" data-del-promo="' + p.id + '">Eliminar</button>' +
+      '</span>' +
+    '</div>';
+  });
+  pc.innerHTML = html || '<p class="warn-text">Sin promociones registradas.</p>';
+
+  pc.querySelectorAll('[data-toggle-promo]').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      const p = promoById(btn.getAttribute('data-toggle-promo'));
+      if(!p) return;
+      p.activo = p.activo === false ? true : false;
+      await saveData();
+      renderPromoCatalog();
+      populateSelects();
+    });
+  });
+  pc.querySelectorAll('[data-del-promo]').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      data.promotions = data.promotions.filter(function(p) { return p.id !== btn.getAttribute('data-del-promo'); });
+      await saveData();
+      renderPromoCatalog();
+      populateSelects();
+      showToast('Promoción eliminada.');
+    });
+  });
 }
 
 /* Control de Pestañas */
@@ -1061,6 +1327,26 @@ document.querySelectorAll('.tab').forEach(function(tab) {
 document.getElementById('mFechaInicio').value = todayISO();
 document.getElementById('mObjetivo').addEventListener('change', updatePlanPreview);
 
+document.getElementById('mMembresia').addEventListener('change', function() {
+  populatePromoCodigoSelect();
+  updateDescuentoPreview();
+});
+
+function toggleDescuentoWraps(prefix) {
+  const tipo = document.getElementById(prefix + 'DescuentoTipo').value;
+  document.getElementById(prefix + 'CodigoWrap').style.display = (tipo === 'codigo') ? '' : 'none';
+  document.getElementById(prefix + 'ManualTipoWrap').style.display = (tipo === 'manual') ? '' : 'none';
+  document.getElementById(prefix + 'ManualValorWrap').style.display = (tipo === 'manual') ? '' : 'none';
+}
+
+document.getElementById('mDescuentoTipo').addEventListener('change', function() {
+  toggleDescuentoWraps('m');
+  updateDescuentoPreview();
+});
+document.getElementById('mPromoCodigo').addEventListener('change', updateDescuentoPreview);
+document.getElementById('mManualTipo').addEventListener('change', updateDescuentoPreview);
+document.getElementById('mManualValor').addEventListener('input', updateDescuentoPreview);
+
 document.getElementById('btnAddMember').addEventListener('click', async function() {
   const nombre = document.getElementById('mNombre').value.trim();
   const telefono = document.getElementById('mTelefono').value.trim();
@@ -1075,6 +1361,26 @@ document.getElementById('btnAddMember').addEventListener('click', async function
   const t = membTypeById(membresiaId);
   const fechaVencimiento = addDays(fechaInicio, t.duracionDias);
 
+  /* Calcular descuento aplicado (código promocional o manual) */
+  const tipoDescuento = document.getElementById('mDescuentoTipo').value;
+  let descuentoInfo = null;
+  let montoDescuento = 0;
+  if(tipoDescuento === 'codigo') {
+    const p = promoById(document.getElementById('mPromoCodigo').value);
+    if(p) {
+      montoDescuento = calcularDescuento(t.precio, p.tipo, p.valor);
+      descuentoInfo = { origen: 'codigo', promoId: p.id, nombre: p.nombre, codigo: p.codigo || '', tipo: p.tipo, valor: p.valor, monto: montoDescuento };
+    }
+  } else if(tipoDescuento === 'manual') {
+    const mTipo = document.getElementById('mManualTipo').value;
+    const mValor = document.getElementById('mManualValor').value;
+    montoDescuento = calcularDescuento(t.precio, mTipo, mValor);
+    if(montoDescuento > 0) {
+      descuentoInfo = { origen: 'manual', nombre: 'Descuento manual', tipo: mTipo, valor: Number(mValor), monto: montoDescuento };
+    }
+  }
+  const precioFinal = t.precio - montoDescuento;
+
   data.members.push({
     id: 'm_' + Date.now() + '_' + Math.floor(Math.random()*1000),
     nombre: nombre,
@@ -1083,21 +1389,39 @@ document.getElementById('btnAddMember').addEventListener('click', async function
     fechaVencimiento: fechaVencimiento,
     membresiaId: membresiaId,
     objetivoId: objetivoId,
-    extras: []
+    extras: [],
+    pagos: [{
+      fecha: fechaInicio,
+      monto: precioFinal,
+      membresiaId: membresiaId,
+      descuento: descuentoInfo
+    }]
   });
 
   await saveData();
   renderAll();
-  showToast('Miembro registrado correctamente.');
+  if(montoDescuento > 0) {
+    showToast('Miembro registrado con descuento de L. ' + formatLempiras(montoDescuento) + '. Total: L. ' + formatLempiras(precioFinal) + '.');
+  } else {
+    showToast('Miembro registrado correctamente.');
+  }
   document.getElementById('mNombre').value = '';
   document.getElementById('mTelefono').value = '';
   document.getElementById('mFechaInicio').value = todayISO();
+  document.getElementById('mDescuentoTipo').value = 'ninguno';
+  toggleDescuentoWraps('m');
+  document.getElementById('mManualValor').value = '';
+  updateDescuentoPreview();
 });
 
 document.getElementById('btnClearMember').addEventListener('click', function() {
   document.getElementById('mNombre').value = '';
   document.getElementById('mTelefono').value = '';
   document.getElementById('mFechaInicio').value = todayISO();
+  document.getElementById('mDescuentoTipo').value = 'ninguno';
+  toggleDescuentoWraps('m');
+  document.getElementById('mManualValor').value = '';
+  updateDescuentoPreview();
 });
 
 /* Registrar Cargos Extras */
@@ -1169,6 +1493,47 @@ document.getElementById('btnAddExtraType').addEventListener('click', async funct
   showToast('Extra agregado al catálogo.');
 });
 
+/* Crear nueva promoción / descuento en el catálogo */
+document.getElementById('btnAddPromo').addEventListener('click', async function() {
+  const nombre = document.getElementById('newPromoNombre').value.trim();
+  const codigo = document.getElementById('newPromoCodigo').value.trim().toUpperCase();
+  const tipo = document.getElementById('newPromoTipo').value;
+  const valor = document.getElementById('newPromoValor').value;
+  const aplicaA = document.getElementById('newPromoAplicaA').value;
+
+  if(!nombre || !valor || Number(valor) <= 0) {
+    showToast('Completa el nombre y un valor de descuento válido.', true);
+    return;
+  }
+  if(tipo === 'porcentaje' && Number(valor) > 100) {
+    showToast('El porcentaje de descuento no puede ser mayor a 100.', true);
+    return;
+  }
+  if(codigo && data.promotions.some(function(p) { return p.codigo && p.codigo.toUpperCase() === codigo; })) {
+    showToast('Ya existe una promoción con ese código.', true);
+    return;
+  }
+
+  data.promotions.push({
+    id: 'promo_' + Date.now(),
+    nombre: nombre,
+    codigo: codigo,
+    tipo: tipo,
+    valor: Number(valor),
+    aplicaA: aplicaA,
+    activo: true
+  });
+
+  await saveData();
+  renderPromoCatalog();
+  populateSelects();
+
+  document.getElementById('newPromoNombre').value = '';
+  document.getElementById('newPromoCodigo').value = '';
+  document.getElementById('newPromoValor').value = '';
+  showToast('Promoción creada correctamente.');
+});
+
 /* Control de Renovación de Membresía */
 let pendingRenovarId = null;
 
@@ -1189,8 +1554,45 @@ function openRenovarModal(id) {
   });
   sel.innerHTML = opts;
 
+  document.getElementById('renovDescuentoTipo').value = 'ninguno';
+  toggleDescuentoWraps('renov');
+  document.getElementById('renovManualValor').value = '';
+  populateRenovPromoCodigoSelect();
   updateRenovarPreview();
   document.getElementById('overlayRenovar').classList.add('show');
+}
+
+/* Llena el select de códigos promocionales según el tipo de membresía elegido en la renovación */
+function populateRenovPromoCodigoSelect() {
+  const sel = document.getElementById('renovPromoCodigo');
+  if(!sel) return;
+  const t = membTypeById(document.getElementById('renovMembresia').value);
+  const categoria = categoriaMembresia(t);
+  const promos = promosAplicables(categoria);
+  let opts = '';
+  promos.forEach(function(p) {
+    const valorTxt = p.tipo === 'porcentaje' ? (p.valor + '%') : ('L. ' + formatLempiras(p.valor));
+    opts += '<option value="' + p.id + '">' + escapeHtml(p.nombre) + (p.codigo ? ' [' + escapeHtml(p.codigo) + ']' : '') + ' — ' + valorTxt + '</option>';
+  });
+  sel.innerHTML = opts || '<option value="">No hay promociones disponibles</option>';
+}
+
+/* Calcula el descuento actualmente seleccionado en el modal de renovación */
+function calcularDescuentoRenovarActual(precioOriginal) {
+  const tipoDescuento = document.getElementById('renovDescuentoTipo').value;
+  if(tipoDescuento === 'codigo') {
+    const p = promoById(document.getElementById('renovPromoCodigo').value);
+    if(!p) return { monto: 0, info: null };
+    const monto = calcularDescuento(precioOriginal, p.tipo, p.valor);
+    return { monto: monto, info: { origen: 'codigo', promoId: p.id, nombre: p.nombre, codigo: p.codigo || '', tipo: p.tipo, valor: p.valor, monto: monto } };
+  } else if(tipoDescuento === 'manual') {
+    const mTipo = document.getElementById('renovManualTipo').value;
+    const mValor = document.getElementById('renovManualValor').value;
+    const monto = calcularDescuento(precioOriginal, mTipo, mValor);
+    if(monto <= 0) return { monto: 0, info: null };
+    return { monto: monto, info: { origen: 'manual', nombre: 'Descuento manual', tipo: mTipo, valor: Number(mValor), monto: monto } };
+  }
+  return { monto: 0, info: null };
 }
 
 function updateRenovarPreview() {
@@ -1202,13 +1604,33 @@ function updateRenovarPreview() {
   const today = todayISO();
   const base = m.fechaVencimiento > today ? m.fechaVencimiento : today;
   const nuevaFecha = addDays(base, t.duracionDias);
-  document.getElementById('renovPreview').textContent =
-    'La membresía quedará vigente hasta el ' + fmtDate(nuevaFecha) +
+
+  const descuento = calcularDescuentoRenovarActual(t.precio);
+  const precioFinal = t.precio - descuento.monto;
+
+  let texto = 'La membresía quedará vigente hasta el ' + fmtDate(nuevaFecha) +
     (m.fechaVencimiento > today ? ' (se suma a los días que le quedaban).' : ' (empieza a contar desde hoy porque ya estaba vencida).');
+
+  if(descuento.monto > 0) {
+    texto += ' Precio: L. ' + formatLempiras(t.precio) + ' — Descuento: L. ' + formatLempiras(descuento.monto) + ' — Total a pagar: L. ' + formatLempiras(precioFinal) + '.';
+  } else {
+    texto += ' Total a pagar: L. ' + formatLempiras(t.precio) + '.';
+  }
+  document.getElementById('renovPreview').textContent = texto;
 }
 
-document.getElementById('renovMembresia').addEventListener('change', updateRenovarPreview);
+document.getElementById('renovMembresia').addEventListener('change', function() {
+  populateRenovPromoCodigoSelect();
+  updateRenovarPreview();
+});
 document.getElementById('renovFecha').addEventListener('change', updateRenovarPreview);
+document.getElementById('renovDescuentoTipo').addEventListener('change', function() {
+  toggleDescuentoWraps('renov');
+  updateRenovarPreview();
+});
+document.getElementById('renovPromoCodigo').addEventListener('change', updateRenovarPreview);
+document.getElementById('renovManualTipo').addEventListener('change', updateRenovarPreview);
+document.getElementById('renovManualValor').addEventListener('input', updateRenovarPreview);
 
 document.getElementById('btnCancelRenovar').addEventListener('click', function() {
   document.getElementById('overlayRenovar').classList.remove('show');
@@ -1223,6 +1645,9 @@ document.getElementById('btnConfirmRenovar').addEventListener('click', async fun
   const fechaPago = document.getElementById('renovFecha').value || todayISO();
   if(!t) { showToast('Selecciona un tipo de membresía válido.', true); return; }
 
+  const descuento = calcularDescuentoRenovarActual(t.precio);
+  const precioFinal = t.precio - descuento.monto;
+
   const base = m.fechaVencimiento > fechaPago ? m.fechaVencimiento : fechaPago;
   m.fechaVencimiento = addDays(base, t.duracionDias);
   m.membresiaId = t.id;
@@ -1230,14 +1655,19 @@ document.getElementById('btnConfirmRenovar').addEventListener('click', async fun
   if(!m.pagos) m.pagos = [];
   m.pagos.push({
     fecha: fechaPago,
-    monto: t.precio,
-    membresiaId: t.id
+    monto: precioFinal,
+    membresiaId: t.id,
+    descuento: descuento.info
   });
 
   await saveData();
   renderAll();
   document.getElementById('overlayRenovar').classList.remove('show');
-  showToast('Pago registrado. ' + m.nombre + ' queda al día hasta el ' + fmtDate(m.fechaVencimiento) + '.');
+  if(descuento.monto > 0) {
+    showToast('Pago registrado con descuento de L. ' + formatLempiras(descuento.monto) + '. ' + m.nombre + ' queda al día hasta el ' + fmtDate(m.fechaVencimiento) + '.');
+  } else {
+    showToast('Pago registrado. ' + m.nombre + ' queda al día hasta el ' + fmtDate(m.fechaVencimiento) + '.');
+  }
   pendingRenovarId = null;
 });
 
@@ -1283,9 +1713,18 @@ document.getElementById('btnExport').addEventListener('click', function() {
     }
 
     let pagosTotal = 0;
+    let ahorroTotal = 0;
+    let promosAplicadas = [];
     let ultimoPago = '—';
     if(m.pagos && m.pagos.length > 0) {
-      m.pagos.forEach(function(p) { pagosTotal += (Number(p.monto) || 0); });
+      m.pagos.forEach(function(p) {
+        pagosTotal += (Number(p.monto) || 0);
+        if(p.descuento && p.descuento.monto) {
+          ahorroTotal += Number(p.descuento.monto) || 0;
+          const label = p.descuento.nombre + (p.descuento.codigo ? ' [' + p.descuento.codigo + ']' : '');
+          if(promosAplicadas.indexOf(label) === -1) promosAplicadas.push(label);
+        }
+      });
       ultimoPago = m.pagos[m.pagos.length - 1].fecha;
     }
     
@@ -1298,7 +1737,9 @@ document.getElementById('btnExport').addEventListener('click', function() {
       'Fecha de Vencimiento': m.fechaVencimiento,
       'Estado Actual': memberStatus(m) === 'ACTIVO' ? 'Al día' : 'Vencido',
       'Cargos Extras (L.)': extrasTotal,
-      'Total Pagado en Renovaciones (L.)': pagosTotal,
+      'Total Pagado (L.)': pagosTotal,
+      'Descuentos/Promociones Aplicadas': promosAplicadas.length ? promosAplicadas.join(', ') : '—',
+      'Ahorro Total por Descuentos (L.)': ahorroTotal,
       'Último Pago': ultimoPago
     };
   });
@@ -1314,4 +1755,3 @@ loadData();
 </script>
 </body>
 </html>
-
