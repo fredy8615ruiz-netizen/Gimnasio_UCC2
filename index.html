@@ -388,6 +388,7 @@
               <th>Nombre</th>
               <th>Celular</th>
               <th>Membresía</th>
+              <th>Matrícula</th>
               <th>Tipo de Persona</th>
               <th>Vence</th>
               <th>Estado</th>
@@ -395,7 +396,7 @@
             </tr>
           </thead>
           <tbody id="membersBody">
-            <tr class="empty-row"><td colspan="7">Cargando datos...</td></tr>
+            <tr class="empty-row"><td colspan="8">Cargando datos...</td></tr>
           </tbody>
         </table>
       </div>
@@ -427,6 +428,13 @@
           <label>Tipo de Persona que Entrena *</label>
           <select id="mObjetivo"></select>
         </div>
+      </div>
+
+      <div class="checkbox-row" style="margin-top:6px;">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
+          <input type="checkbox" id="mIncluyeMatricula" style="width:auto;">
+          <span id="mMatriculaLabel">Incluir matrícula anual</span>
+        </label>
       </div>
 
       <h3 style="margin:20px 0 10px;font-size:14px;">Promoción o Descuento (opcional)</h3>
@@ -536,7 +544,7 @@
         </select>
       </div>
       <button class="btn btn-primary btn-sm" id="btnAddPromo">Crear Promoción</button>
-      <p class="warn-text">Las promociones "Solo Matrícula" aparecen al elegir el tipo de membresía "Matrícula"; el resto se consideran mensualidades.</p>
+      <p class="warn-text">Las promociones "Solo Matrícula" no se aplican automáticamente sobre la casilla de matrícula anual (esa se cobra a precio completo); "Solo Mensualidad" y "Ambas" aplican al descuento de la categoría elegida.</p>
     </div>
   </div>
 
@@ -649,6 +657,12 @@
         <label>Valor del descuento</label>
         <input type="number" id="renovManualValor" placeholder="Ej. 10" min="0">
       </div>
+    </div>
+    <div class="checkbox-row" style="margin-top:6px;">
+      <label style="display:flex;align-items:center;gap:8px;font-weight:normal;">
+        <input type="checkbox" id="renovIncluyeMatricula" style="width:auto;">
+        <span id="renovMatriculaLabel">Incluir matrícula anual</span>
+      </label>
     </div>
     <p class="warn-text" id="renovPreview" style="margin-top:2px;"></p>
     <div class="modal-actions">
@@ -878,6 +892,22 @@ function memberStatus(m) {
   return m.fechaVencimiento >= today ? 'ACTIVO' : 'VENCIDO';
 }
 
+/* Tipo de membresía que representa la matrícula anual (se excluye del selector de categorías) */
+function getMatriculaType() {
+  return data.membershipTypes.find(function(t) { return categoriaMembresia(t) === 'matricula'; });
+}
+
+/* Categorías seleccionables como "Tipo de Membresía" (excluye la matrícula, que ahora es un cargo aparte) */
+function categoriasSeleccionables() {
+  return data.membershipTypes.filter(function(t) { return categoriaMembresia(t) !== 'matricula'; });
+}
+
+/* Estado de la matrícula anual de un miembro: SIN_MATRICULA | VIGENTE | VENCIDA */
+function matriculaStatus(m) {
+  if(!m.matriculaVencimiento) return 'SIN_MATRICULA';
+  return m.matriculaVencimiento >= todayISO() ? 'VIGENTE' : 'VENCIDA';
+}
+
 /* ====== Configuración de Supabase ======
    1. Ve a tu proyecto en supabase.com -> Project Settings -> API
    2. Copia "Project URL" y pégala abajo en SUPABASE_URL
@@ -1018,11 +1048,6 @@ function renderResumen() {
       vencidos++;
     }
     
-    if(m.fechaInicio && m.fechaInicio.substring(0, 7) === currentMonth) {
-      const mt = membTypeById(m.membresiaId);
-      if(mt) ingresosMes += Number(mt.precio);
-    }
-    
     if(m.extras) {
       m.extras.forEach(function(ex) {
         if(ex.fecha && ex.fecha.substring(0, 7) === currentMonth) {
@@ -1093,7 +1118,7 @@ function renderMembers() {
   const body = document.getElementById('membersBody');
   body.innerHTML = '';
   if(filtered.length === 0) {
-    body.innerHTML = '<tr class="empty-row"><td colspan="7">No se encontraron miembros.</td></tr>';
+    body.innerHTML = '<tr class="empty-row"><td colspan="8">No se encontraron miembros.</td></tr>';
     return;
   }
   
@@ -1118,11 +1143,22 @@ function renderMembers() {
     
     const badgeClass = status === 'ACTIVO' ? 'badge activo' : 'badge vencido';
     const badgeText = status === 'ACTIVO' ? 'Al día' : 'Vencido';
+
+    const mStatus = matriculaStatus(m);
+    let matriculaCellHtml;
+    if(mStatus === 'SIN_MATRICULA') {
+      matriculaCellHtml = '<span class="badge vencido">Sin matrícula</span>';
+    } else if(mStatus === 'VIGENTE') {
+      matriculaCellHtml = '<span class="badge activo">Vigente</span><div class="mono" style="font-size:11px;margin-top:2px;">' + fmtDate(m.matriculaVencimiento) + '</div>';
+    } else {
+      matriculaCellHtml = '<span class="badge vencido">Vencida</span><div class="mono" style="font-size:11px;margin-top:2px;">' + fmtDate(m.matriculaVencimiento) + '</div>';
+    }
     
     body.innerHTML += '<tr>' +
       '<td>' + escapeHtml(m.nombre) + extrasChips + '</td>' +
       '<td class="mono">' + escapeHtml(m.telefono || '—') + '</td>' +
       '<td>' + (t ? escapeHtml(t.nombre) : '—') + '</td>' +
+      '<td>' + matriculaCellHtml + '</td>' +
       '<td>' + (o ? escapeHtml(o.nombre) : '—') + '</td>' +
       '<td class="mono">' + fmtDate(m.fechaVencimiento) + '</td>' +
       '<td><span class="' + badgeClass + '">' + badgeText + '</span></td>' +
@@ -1148,10 +1184,18 @@ function renderMembers() {
 function populateSelects() {
   const mSel = document.getElementById('mMembresia');
   let mOptions = '';
-  data.membershipTypes.forEach(function(t) {
+  categoriasSeleccionables().forEach(function(t) {
     mOptions += '<option value="' + t.id + '">' + escapeHtml(t.nombre) + ' — L. ' + formatLempiras(t.precio) + ' (' + t.duracionDias + ' días)</option>';
   });
   mSel.innerHTML = mOptions;
+
+  const matType = getMatriculaType();
+  const mMatriculaLabel = document.getElementById('mMatriculaLabel');
+  if(mMatriculaLabel) {
+    mMatriculaLabel.textContent = matType ?
+      ('Incluir matrícula anual (L. ' + formatLempiras(matType.precio) + ' — ' + matType.duracionDias + ' días)') :
+      'Incluir matrícula anual (no configurada en el catálogo)';
+  }
 
   const oSel = document.getElementById('mObjetivo');
   let oOptions = '';
@@ -1381,6 +1425,26 @@ document.getElementById('btnAddMember').addEventListener('click', async function
   }
   const precioFinal = t.precio - montoDescuento;
 
+  /* Matrícula anual (opcional, cargo aparte con su propio vencimiento) */
+  const incluyeMatricula = document.getElementById('mIncluyeMatricula').checked;
+  const matType = getMatriculaType();
+  let matriculaVencimiento = null;
+  const pagos = [{
+    fecha: fechaInicio,
+    monto: precioFinal,
+    membresiaId: membresiaId,
+    descuento: descuentoInfo
+  }];
+  if(incluyeMatricula && matType) {
+    matriculaVencimiento = addDays(fechaInicio, matType.duracionDias);
+    pagos.push({
+      fecha: fechaInicio,
+      monto: matType.precio,
+      membresiaId: matType.id,
+      descuento: null
+    });
+  }
+
   data.members.push({
     id: 'm_' + Date.now() + '_' + Math.floor(Math.random()*1000),
     nombre: nombre,
@@ -1390,18 +1454,15 @@ document.getElementById('btnAddMember').addEventListener('click', async function
     membresiaId: membresiaId,
     objetivoId: objetivoId,
     extras: [],
-    pagos: [{
-      fecha: fechaInicio,
-      monto: precioFinal,
-      membresiaId: membresiaId,
-      descuento: descuentoInfo
-    }]
+    matriculaVencimiento: matriculaVencimiento,
+    pagos: pagos
   });
 
   await saveData();
   renderAll();
-  if(montoDescuento > 0) {
-    showToast('Miembro registrado con descuento de L. ' + formatLempiras(montoDescuento) + '. Total: L. ' + formatLempiras(precioFinal) + '.');
+  const totalCobrado = precioFinal + (incluyeMatricula && matType ? matType.precio : 0);
+  if(montoDescuento > 0 || (incluyeMatricula && matType)) {
+    showToast('Miembro registrado. Total cobrado: L. ' + formatLempiras(totalCobrado) + (montoDescuento > 0 ? ' (incluye descuento de L. ' + formatLempiras(montoDescuento) + ')' : '') + '.');
   } else {
     showToast('Miembro registrado correctamente.');
   }
@@ -1409,6 +1470,7 @@ document.getElementById('btnAddMember').addEventListener('click', async function
   document.getElementById('mTelefono').value = '';
   document.getElementById('mFechaInicio').value = todayISO();
   document.getElementById('mDescuentoTipo').value = 'ninguno';
+  document.getElementById('mIncluyeMatricula').checked = false;
   toggleDescuentoWraps('m');
   document.getElementById('mManualValor').value = '';
   updateDescuentoPreview();
@@ -1419,6 +1481,7 @@ document.getElementById('btnClearMember').addEventListener('click', function() {
   document.getElementById('mTelefono').value = '';
   document.getElementById('mFechaInicio').value = todayISO();
   document.getElementById('mDescuentoTipo').value = 'ninguno';
+  document.getElementById('mIncluyeMatricula').checked = false;
   toggleDescuentoWraps('m');
   document.getElementById('mManualValor').value = '';
   updateDescuentoPreview();
@@ -1548,11 +1611,26 @@ function openRenovarModal(id) {
 
   const sel = document.getElementById('renovMembresia');
   let opts = '';
-  data.membershipTypes.forEach(function(t) {
+  categoriasSeleccionables().forEach(function(t) {
     const selected = t.id === m.membresiaId ? ' selected' : '';
     opts += '<option value="' + t.id + '"' + selected + '>' + escapeHtml(t.nombre) + ' — L. ' + formatLempiras(t.precio) + ' (' + t.duracionDias + ' días)</option>';
   });
   sel.innerHTML = opts;
+
+  const matType = getMatriculaType();
+  const renovMatriculaLabel = document.getElementById('renovMatriculaLabel');
+  const renovMatriculaCheckbox = document.getElementById('renovIncluyeMatricula');
+  if(renovMatriculaLabel) {
+    if(matType) {
+      const estadoTxt = m.matriculaVencimiento ?
+        (matriculaStatus(m) === 'VIGENTE' ? ('vigente hasta ' + fmtDate(m.matriculaVencimiento)) : ('vencida el ' + fmtDate(m.matriculaVencimiento))) :
+        'nunca pagada';
+      renovMatriculaLabel.textContent = 'Incluir matrícula anual (L. ' + formatLempiras(matType.precio) + ' — ' + estadoTxt + ')';
+    } else {
+      renovMatriculaLabel.textContent = 'Incluir matrícula anual (no configurada en el catálogo)';
+    }
+  }
+  if(renovMatriculaCheckbox) renovMatriculaCheckbox.checked = false;
 
   document.getElementById('renovDescuentoTipo').value = 'ninguno';
   toggleDescuentoWraps('renov');
@@ -1660,14 +1738,29 @@ document.getElementById('btnConfirmRenovar').addEventListener('click', async fun
     descuento: descuento.info
   });
 
+  /* Matrícula anual (opcional, cargo aparte con su propio vencimiento) */
+  const incluyeMatricula = document.getElementById('renovIncluyeMatricula').checked;
+  const matType = getMatriculaType();
+  let matriculaCobrada = 0;
+  if(incluyeMatricula && matType) {
+    const baseMatricula = (m.matriculaVencimiento && m.matriculaVencimiento > fechaPago) ? m.matriculaVencimiento : fechaPago;
+    m.matriculaVencimiento = addDays(baseMatricula, matType.duracionDias);
+    m.pagos.push({
+      fecha: fechaPago,
+      monto: matType.precio,
+      membresiaId: matType.id,
+      descuento: null
+    });
+    matriculaCobrada = matType.precio;
+  }
+
   await saveData();
   renderAll();
   document.getElementById('overlayRenovar').classList.remove('show');
-  if(descuento.monto > 0) {
-    showToast('Pago registrado con descuento de L. ' + formatLempiras(descuento.monto) + '. ' + m.nombre + ' queda al día hasta el ' + fmtDate(m.fechaVencimiento) + '.');
-  } else {
-    showToast('Pago registrado. ' + m.nombre + ' queda al día hasta el ' + fmtDate(m.fechaVencimiento) + '.');
-  }
+  const totalCobrado = precioFinal + matriculaCobrada;
+  let msg = 'Pago registrado. Total: L. ' + formatLempiras(totalCobrado) + '. ' + m.nombre + ' queda al día hasta el ' + fmtDate(m.fechaVencimiento) + '.';
+  if(matriculaCobrada > 0) msg += ' Matrícula vigente hasta el ' + fmtDate(m.matriculaVencimiento) + '.';
+  showToast(msg);
   pendingRenovarId = null;
 });
 
@@ -1736,6 +1829,8 @@ document.getElementById('btnExport').addEventListener('click', function() {
       'Fecha de Inicio': m.fechaInicio,
       'Fecha de Vencimiento': m.fechaVencimiento,
       'Estado Actual': memberStatus(m) === 'ACTIVO' ? 'Al día' : 'Vencido',
+      'Matrícula': matriculaStatus(m) === 'SIN_MATRICULA' ? 'Sin matrícula' : (matriculaStatus(m) === 'VIGENTE' ? 'Vigente' : 'Vencida'),
+      'Matrícula Vence': m.matriculaVencimiento || '—',
       'Cargos Extras (L.)': extrasTotal,
       'Total Pagado (L.)': pagosTotal,
       'Descuentos/Promociones Aplicadas': promosAplicadas.length ? promosAplicadas.join(', ') : '—',
@@ -1755,3 +1850,4 @@ loadData();
 </script>
 </body>
 </html>
+
